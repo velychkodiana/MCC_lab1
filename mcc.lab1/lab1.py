@@ -11,15 +11,11 @@ N = len(data)
 delta_t = T / N
 time_values = np.linspace(0, T, N)
 
-# зобразимо перетворення Фур'є
+# обчислення перетворення Фур'є
 def calculate_dft(signal):
     N = len(signal)
-    result = np.zeros(N, dtype=complex)
-    for k in range(N):
-        for m in range(N):
-            result[k] += signal[m] * np.exp(-2j * np.pi * k * m / N)
-        result[k] /= N  # нормалізація
-    return result
+    exp_factor = -2j * np.pi / N
+    return np.array([np.sum(signal * np.exp(exp_factor * k * np.arange(N))) for k in range(N)]) / N
 
 fourier_transform = calculate_dft(data)
 
@@ -27,126 +23,112 @@ fourier_transform = calculate_dft(data)
 frequencies = np.fft.fftfreq(N, delta_t)
 magnitude_fourier = np.abs(fourier_transform)
 
-# визначимо піки 
+# визначимо піки
 half_range = N // 2
 peak_indices, _ = find_peaks(magnitude_fourier[:half_range])
 
-# оберемо найбільш значущі частоти
-significant_frequencies = frequencies[peak_indices]
+# відбір значущих частот
 min_threshold = 1
+significant_frequencies = frequencies[peak_indices]
 filtered_frequencies = significant_frequencies[np.abs(significant_frequencies) > min_threshold]
 
-# використаємо метод найменших квадратів
+# метод найменших квадратів
 def sine_wave(time, frequency):
     return np.sin(2 * np.pi * frequency * time)
 
-# побудуємо матрицю для системи рівнянь
-def construct_matrix(time, freq):
-    matrix = np.zeros((5, 5))
+def construct_matrix_and_vector(time, signal, freq):
+    sine_t = sine_wave(time, freq[0])
+    time_powers = [np.sum(time ** p) for p in range(7)]
 
-    matrix[0, 0] = np.sum(time ** 6)
-    matrix[0, 1] = np.sum(time ** 5)
-    matrix[0, 2] = np.sum(time ** 4)
-    matrix[0, 3] = np.sum(sine_wave(time, freq[0]) * time ** 3)
-    matrix[0, 4] = np.sum(time ** 3)
+    # матриця
+    matrix = np.array([
+        [time_powers[6], time_powers[5], time_powers[4], np.sum(sine_t * time ** 3), time_powers[3]],
+        [time_powers[5], time_powers[4], time_powers[3], np.sum(sine_t * time ** 2), time_powers[2]],
+        [time_powers[4], time_powers[3], time_powers[2], np.sum(sine_t * time), time_powers[1]],
+        [np.sum(sine_t * time ** 3), np.sum(sine_t * time ** 2), np.sum(sine_t * time), np.sum(sine_t ** 2), np.sum(sine_t)],
+        [time_powers[3], time_powers[2], time_powers[1], np.sum(sine_t), N]
+    ])
 
-    matrix[1, 0] = np.sum(time ** 5)
-    matrix[1, 1] = np.sum(time ** 4)
-    matrix[1, 2] = np.sum(time ** 3)
-    matrix[1, 3] = np.sum(sine_wave(time, freq[0]) * time ** 2)
-    matrix[1, 4] = np.sum(time ** 2)
-
-    matrix[2, 0] = np.sum(time ** 4)
-    matrix[2, 1] = np.sum(time ** 3)
-    matrix[2, 2] = np.sum(time ** 2)
-    matrix[2, 3] = np.sum(sine_wave(time, freq[0]) * time)
-    matrix[2, 4] = np.sum(time)
-
-    matrix[3, 0] = np.sum(sine_wave(time, freq[0]) * time ** 3)
-    matrix[3, 1] = np.sum(sine_wave(time, freq[0]) * time ** 2)
-    matrix[3, 2] = np.sum(sine_wave(time, freq[0]) * time)
-    matrix[3, 3] = np.sum(sine_wave(time, freq[0]) ** 2)
-    matrix[3, 4] = np.sum(N * sine_wave(time, freq[0]))
-
-    matrix[4, 0] = np.sum(time ** 3)
-    matrix[4, 1] = np.sum(time ** 2)
-    matrix[4, 2] = np.sum(time)
-    matrix[4, 3] = np.sum(N * sine_wave(time, freq[0]))
-    matrix[4, 4] = N
-
-    return matrix
-
-# виведемо вектор результатів для системи рівнянь
-def construct_vector(time, signal, freq):
+    # вектор
     vector = np.array([
         np.sum(signal * time ** 3),
         np.sum(signal * time ** 2),
         np.sum(signal * time),
-        np.sum(signal * sine_wave(time, freq[0])),
+        np.sum(signal * sine_t),
         np.sum(signal)
     ])
-    return vector
 
-# знайдемо розв'язок (метод найменших квадратів)
+    return matrix, vector
+
+# вирішення системи рівнянь
 def solve_least_squares(time, signal, freq):
-    A = construct_matrix(time, freq)
-    c = construct_vector(time, signal, freq)
-    return np.linalg.solve(A, c)
+    matrix, vector = construct_matrix_and_vector(time, signal, freq)
+    return np.linalg.solve(matrix, vector)
 
 parameters = solve_least_squares(time_values, data, filtered_frequencies)
 rounded_parameters = np.round(parameters).astype(int)
 
+# виведення результатів
 print("важливі частоти:", filtered_frequencies)
 print("підібрані параметри a:", rounded_parameters)
 
-# сторимо рівняння для моделі
+# рівняння моделі
 def display_model_equation(params, freqs):
     equation = f"y(t) = {params[0]} * t^3 + {params[1]} * t^2 + {params[2]} * t + {params[3]} * sin(2π * {freqs[0]} * t) + {params[4]}"
     print("рівняння моделі:", equation)
 
 display_model_equation(rounded_parameters, filtered_frequencies)
 
-# зобразимо графік спостережень
-plt.figure(figsize=(10, 5))
-plt.plot(time_values, data)
-plt.title('спостереження y(t) в залежності від часу')
-plt.xlabel(' час (в секундах)')
-plt.ylabel('y(t)')
-plt.grid(True)
-plt.show()
+# побудова графіків
+def plot_observations(time, signal):
+    plt.figure(figsize=(10, 5))
+    plt.plot(time, signal)
+    plt.title('спостереження y(t) в залежності від часу')
+    plt.xlabel(' час (в секундах)')
+    plt.ylabel('y(t)')
+    plt.grid(True)
+    plt.show()
 
-# зобразимо графік модуля перетворення Фур'є
-plt.figure(figsize=(10, 5))
-plt.plot(frequencies[:N], magnitude_fourier[:N])
-plt.title('модуль перетворення Фур\'є')
-plt.xlabel('частота')
-plt.ylabel('|c_y(k)|')
-plt.grid(True)
-plt.show()
+def plot_fourier_transform(fregs, magnitudes):
+    plt.figure()
+    plt.plot(time_values, np.abs(fourier_transform))
+    plt.title('модуль перетворення Фур\'є')
+    plt.xlabel('частота')
+    plt.ylabel('|c_y(k)|')
+    plt.grid(True)
+    plt.show()
 
-plt.figure(figsize=(10, 5))
-plt.plot(frequencies[:half_range], magnitude_fourier[:half_range])
-plt.plot(frequencies[peak_indices], magnitude_fourier[peak_indices], 'x')
-plt.title('модуль перетворення Фур\'є з піками')
-plt.xlabel('частота')
-plt.ylabel('|c_y(k)|')
-plt.grid(True)
-plt.show()
+def plot_peaks(freqs, magnitudes, peaks):
+    plt.figure(figsize=(10, 5))
+    plt.plot(freqs[:half_range], magnitudes[:half_range])
+    plt.plot(freqs[peaks], magnitudes[peaks], 'x')
+    plt.title('модуль перетворення Фур\'є з піками')
+    plt.xlabel('частота')
+    plt.ylabel('|c_y(k)|')
+    plt.grid(True)
+    plt.show()
 
-# нарешті!!! зобразимо модель з підібраними параметрами
 def generate_model(params, time, freq):
-    return params[0] * time ** 3 + params[1] * time ** 2 + params[2] * time + params[3] * np.sin(2 * np.pi * freq[0] * time) + params[4]
+    return (params[0] * time ** 3 + params[1] * time ** 2 + params[2] * time
+            + params[3] * np.sin(2 * np.pi * freq[0] * time) + params[4])
+
+def plot_model(time, model):
+    plt.figure(figsize=(10, 5))
+    plt.plot(time, model)
+    plt.title('графік моделі з підібраними параметрами')
+    plt.xlabel('час (в секундах)')
+    plt.ylabel('y(t)')
+    plt.grid(True)
+    plt.show()
+
+# відображення графіків
+plot_observations(time_values, data)
+plot_fourier_transform(frequencies, magnitude_fourier)
+plot_peaks(frequencies, magnitude_fourier, peak_indices)
 
 fitted_model = generate_model(rounded_parameters, time_values, filtered_frequencies)
+plot_model(time_values, fitted_model)
 
-plt.figure(figsize=(10, 5))
-plt.plot(time_values, fitted_model)
-plt.title('графік моделі з підібраними параметрами')
-plt.xlabel('час (в секундах)')
-plt.ylabel('y(t)')
-plt.grid(True)
-plt.show()
-
-# виведемо середньоквадратичну похибку
+# середньоквадратична похибка
 mse_value = np.mean((data - fitted_model) ** 2)
 print(f"середньоквадратична похибка: {mse_value}")
