@@ -2,45 +2,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 
-# Завантаження даних із файлу
+# візьмемо із файлу (варіант 3)
 data = np.loadtxt('/Users/macbookpro/Desktop/МСС/Lab1/f3.txt')
 
-# Параметри
+# ввід параметрів
 T = 5
 N = len(data)
 delta_t = T / N
 time_values = np.linspace(0, T, N)
 
-# Дискретне перетворення Фур'є
+# зобразимо перетворення Фур'є
 def calculate_dft(signal):
     N = len(signal)
     result = np.zeros(N, dtype=complex)
     for k in range(N):
         for m in range(N):
             result[k] += signal[m] * np.exp(-2j * np.pi * k * m / N)
-        result[k] /= N  # Нормалізація
+        result[k] /= N  # нормалізація
     return result
 
 fourier_transform = calculate_dft(data)
 
-# Визначення частот
+# визначимо частоти
 frequencies = np.fft.fftfreq(N, delta_t)
 magnitude_fourier = np.abs(fourier_transform)
 
-# Пошук піків
+# визначимо піки 
 half_range = N // 2
 peak_indices, _ = find_peaks(magnitude_fourier[:half_range])
 
-# Відбір значущих частот
+# оберемо найбільш значущі частоти
 significant_frequencies = frequencies[peak_indices]
 min_threshold = 1
 filtered_frequencies = significant_frequencies[np.abs(significant_frequencies) > min_threshold]
 
-# Метод найменших квадратів
+# використаємо метод найменших квадратів
 def sine_wave(time, frequency):
     return np.sin(2 * np.pi * frequency * time)
 
-# Побудова матриці для системи рівнянь
+# побудуємо матрицю для системи рівнянь
 def construct_matrix(time, freq):
     matrix = np.zeros((5, 5))
 
@@ -76,7 +76,7 @@ def construct_matrix(time, freq):
 
     return matrix
 
-# Вектор результатів для системи рівнянь
+# виведемо вектор результатів для системи рівнянь
 def construct_vector(time, signal, freq):
     vector = np.array([
         np.sum(signal * time ** 3),
@@ -87,7 +87,7 @@ def construct_vector(time, signal, freq):
     ])
     return vector
 
-# Пошук розв'язку за методом найменших квадратів
+# знайдемо розв'язок (метод найменших квадратів)
 def solve_least_squares(time, signal, freq):
     A = construct_matrix(time, freq)
     c = construct_vector(time, signal, freq)
@@ -96,30 +96,30 @@ def solve_least_squares(time, signal, freq):
 parameters = solve_least_squares(time_values, data, filtered_frequencies)
 rounded_parameters = np.round(parameters).astype(int)
 
-print("Важливі частоти:", filtered_frequencies)
-print("Підібрані параметри a:", rounded_parameters)
+print("важливі частоти:", filtered_frequencies)
+print("підібрані параметри a:", rounded_parameters)
 
-# Створення рівняння моделі
+# сторимо рівняння для моделі
 def display_model_equation(params, freqs):
     equation = f"y(t) = {params[0]} * t^3 + {params[1]} * t^2 + {params[2]} * t + {params[3]} * sin(2π * {freqs[0]} * t) + {params[4]}"
-    print("Рівняння моделі:", equation)
+    print("рівняння моделі:", equation)
 
 display_model_equation(rounded_parameters, filtered_frequencies)
 
-# Графік спостережень
+# зобразимо графік спостережень
 plt.figure(figsize=(10, 5))
 plt.plot(time_values, data)
-plt.title('Спостереження y(t) в залежності від часу')
-plt.xlabel('Час (секунди)')
+plt.title('спостереження y(t) в залежності від часу')
+plt.xlabel(' час (в секундах)')
 plt.ylabel('y(t)')
 plt.grid(True)
 plt.show()
 
-# Графік модуля перетворення Фур'є
+# зобразимо графік модуля перетворення Фур'є
 plt.figure(figsize=(10, 5))
 plt.plot(frequencies[:N], magnitude_fourier[:N])
-plt.title('Модуль перетворення Фур\'є')
-plt.xlabel('Частота')
+plt.title('модуль перетворення Фур\'є')
+plt.xlabel('частота')
 plt.ylabel('|c_y(k)|')
 plt.grid(True)
 plt.show()
@@ -127,13 +127,13 @@ plt.show()
 plt.figure(figsize=(10, 5))
 plt.plot(frequencies[:half_range], magnitude_fourier[:half_range])
 plt.plot(frequencies[peak_indices], magnitude_fourier[peak_indices], 'x')
-plt.title('Модуль перетворення Фур\'є з піками')
-plt.xlabel('Частота')
+plt.title('модуль перетворення Фур\'є з піками')
+plt.xlabel('частота')
 plt.ylabel('|c_y(k)|')
 plt.grid(True)
 plt.show()
 
-# Модель з підібраними параметрами
+# нарешті!!! зобразимо модель з підібраними параметрами
 def generate_model(params, time, freq):
     return params[0] * time ** 3 + params[1] * time ** 2 + params[2] * time + params[3] * np.sin(2 * np.pi * freq[0] * time) + params[4]
 
@@ -141,12 +141,12 @@ fitted_model = generate_model(rounded_parameters, time_values, filtered_frequenc
 
 plt.figure(figsize=(10, 5))
 plt.plot(time_values, fitted_model)
-plt.title('Графік моделі з підібраними параметрами')
-plt.xlabel('Час (секунди)')
+plt.title('графік моделі з підібраними параметрами')
+plt.xlabel('час (в секундах)')
 plt.ylabel('y(t)')
 plt.grid(True)
 plt.show()
 
-# Середньоквадратична похибка
+# виведемо середньоквадратичну похибку
 mse_value = np.mean((data - fitted_model) ** 2)
-print(f"Середньоквадратична похибка: {mse_value}")
+print(f"середньоквадратична похибка: {mse_value}")
